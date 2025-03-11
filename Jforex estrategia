@@ -1,0 +1,279 @@
+import java.util.HashMap;
+import java.util.Map;
+import java.util.UUID;
+import com.dukascopy.api.IChart;
+import com.dukascopy.api.IChartObjectFactory;
+import com.dukascopy.api.drawings.IChartObject;
+// ... otros imports necesarios
+
+/**
+ * Módulo de Interfaz Gráfica para la herramienta de gestión de ratio riesgo/recompensa en JForex.
+ * Este módulo permite al usuario definir y ajustar visualmente los niveles de entrada, stop loss
+ * y take profit, calcular el ratio, y enviar señales a GeneracionSenalesModule.
+ */
+public class InterfazGraficaModule {
+
+    private final GeneracionSenalesModule generacionSenales;
+    private final String eaId;
+    private final Map<String, InstanciaHerramienta> instancias = new HashMap<>();
+
+    /**
+     * Constructor de InterfazGraficaModule.
+     *
+     * @param generacionSenales La instancia de GeneracionSenalesModule a la que se enviarán las señales.
+     * @param eaId El identificador único de esta instancia de la estrategia.
+     */
+    public InterfazGraficaModule(GeneracionSenalesModule generacionSenales, String eaId) {
+        this.generacionSenales = generacionSenales;
+        this.eaId = eaId;
+    }
+
+    /**
+     * Crea una nueva instancia de la herramienta de ratio riesgo/recompensa.
+     *
+     * @param chart El objeto IChart en el que se dibujará la nueva instancia de la herramienta.
+     * @return El ID único de la nueva instancia.
+     */
+    public String crearInstancia(IChart chart) {
+        InstanciaHerramienta nuevaInstancia = new InstanciaHerramienta(chart);
+        String instanceId = nuevaInstancia.getInstanceId();
+        instancias.put(instanceId, nuevaInstancia);
+        return instanceId;
+    }
+
+    /**
+     * Clase que representa una instancia de la herramienta de ratio riesgo/recompensa.
+     * Encapsula todos los datos y objetos gráficos necesarios para una única instancia.
+     */
+    private class InstanciaHerramienta {
+        private final String instanceId;
+        private IChart chart;
+        private IChartObjectFactory factory;
+        // ... otros campos para los objetos gráficos, niveles, opciones, etc.
+
+        /**
+         * Constructor de InstanciaHerramienta.
+         *
+         * @param chart El objeto IChart en el que se dibujará esta instancia de la herramienta.
+         */
+        public InstanciaHerramienta(IChart chart) {
+            this.instanceId = UUID.randomUUID().toString();
+            this.chart = chart;
+            this.factory = chart.getChartObjectFactory();
+            // ... inicializar otros campos
+        }
+
+        /**
+         * Obtiene el ID único de esta instancia.
+         *
+         * @return El ID único de esta instancia.
+         */
+        public String getInstanceId() {
+            return instanceId;
+        }
+
+        // ... métodos para dibujar, ajustar, mover la herramienta, etc.
+    }
+}
+
+/**
+ * Clase que implementa la lógica del controlador según el patrón MVC.
+ * Maneja la interacción entre el modelo (InstanciaHerramienta) y la vista (objetos gráficos),
+ * y realiza las llamadas a GeneracionSenalesModule.
+ */
+class ControladorHerramienta {
+    // ... campos y métodos para manejar eventos, actualizar el modelo y la vista, llamar a GeneracionSenalesModule, etc.
+}
+import com.dukascopy.api.IEngine.LineStyle;
+import com.dukascopy.api.drawings.IChartObject.ColorDef;
+import com.dukascopy.api.drawings.IChartObject.FillStyle;
+import com.dukascopy.api.drawings.IChartObject.SolidFill;
+
+private class InstanciaHerramienta {
+    // ... campos anteriores ...
+    
+    private static final double PIPS_SL_INICIAL = 10;
+    private static final double PIPS_TP_INICIAL = 20;
+
+    // ... constructor y otros métodos ...
+
+    private void dibujarHerramienta() {
+        rectanguloFondo = crearRectanguloFondo();
+        lineaEntrada = crearLineaNivel(nivelEntrada);
+        lineaSL = crearLineaNivel(nivelSL);
+        lineaTP = crearLineaNivel(nivelTP);
+        etiquetaEntrada = crearEtiquetaNivel(nivelEntrada, "", ColorDef.WHITE, esCompra ? ColorDef.GREEN : ColorDef.RED);
+        etiquetaSL = crearEtiquetaNivel(nivelSL, "SL", ColorDef.WHITE, ColorDef.GRAY);
+        etiquetaTP = crearEtiquetaNivel(nivelTP, "TP", ColorDef.WHITE, ColorDef.GRAY);
+    }
+
+    private IChartObject crearRectanguloFondo() {
+        IChartObject rectangulo = factory.createRectangle("RectanguloFondo-" + instanceId, 
+            nivelEntrada, 0, nivelEntrada, 0);
+        rectangulo.setFillStyle(new SolidFill(ColorDef.BLACK.getColor()));
+        // ... configurar otros estilos ...
+        chart.add(rectangulo);
+        return rectangulo;
+    }
+
+    private IChartObject crearLineaNivel(double nivel) {
+        IChartObject linea = factory.createLine("Linea-" + nivel + "-" + instanceId, 
+            0, nivel, 0, nivel);
+        linea.setLineStyle(LineStyle.SOLID);
+        linea.setLineWidth(1);
+        linea.setStrokeColor(ColorDef.WHITE.getColor());
+        chart.add(linea);
+        return linea;
+    }
+
+    private IChartObject crearEtiquetaNivel(double nivel, String prefijo, ColorDef colorTexto, ColorDef colorFondo) {
+        String texto = prefijo + " " + String.format("%.5f", nivel);
+        IChartObject etiqueta = factory.createText("Etiqueta-" + nivel + "-" + instanceId, 
+            0, nivel, 0, nivel, texto);
+        etiqueta.setTextColor(colorTexto.getColor());
+        etiqueta.setBackgroundColor(colorFondo.getColor());
+        // ... configurar otros estilos ...
+        chart.add(etiqueta);
+        return etiqueta;
+    }
+
+    public void ajustarNiveles(double nuevoNivelSL, double nuevoNivelTP) {
+        if (esCompra && (nuevoNivelSL >= nivelEntrada || nuevoNivelTP <= nivelEntrada)
+            || !esCompra && (nuevoNivelSL <= nivelEntrada || nuevoNivelTP >= nivelEntrada)) {
+            throw new IllegalArgumentException("Niveles de Stop Loss y Take Profit inválidos para la dirección actual.");
+        }
+        this.nivelSL = nuevoNivelSL;
+        this.nivelTP = nuevoNivelTP;
+        actualizarObjetosGraficos();
+    }
+
+    public void invertirPosicion() {
+        double tempNivel = this.nivelSL;
+        this.nivelSL = this.nivelTP;
+        this.nivelTP = tempNivel;
+        if (this.nivelSL >= this.nivelEntrada || this.nivelTP <= this.nivelEntrada) {
+            throw new IllegalArgumentException("Niveles de Stop Loss y Take Profit inválidos después de invertir la posición.");
+        }
+        this.esCompra = !this.esCompra;
+        actualizarObjetosGraficos();
+    }
+    
+    // ... otros métodos ...
+}
+
+import javax.swing.JOptionPane;
+import org.example.custom.InputDialog; // Asumiendo que esta es tu clase personalizada
+
+private class InstanciaHerramienta {
+    // ... campos anteriores ...
+    
+    private static final double ESPACIADO_VERTICAL_BOTONES = 10;
+    private static final double ALTURA_BOTON = 25;
+    private static final double X_BOTON = 0; // Se ajustará en posicionarBotones()
+    private static final double Y_BOTON_INICIAL = 20;
+
+    // ... constructor y otros métodos ...
+
+    private void posicionarBotones() {
+        double xBoton = chart.getWidth() - 100; // Ajustar según el ancho actual del gráfico
+        double yBoton = Y_BOTON_INICIAL;
+
+        botonAjustar.setPoints(xBoton, yBoton, xBoton, yBoton + ALTURA_BOTON);
+        botonActivar.setPoints(xBoton, yBoton + ALTURA_BOTON + ESPACIADO_VERTICAL_BOTONES, 
+            xBoton, yBoton + 2*ALTURA_BOTON + ESPACIADO_VERTICAL_BOTONES);
+    }
+
+    // ... otros métodos ...
+
+    private void mostrarConfiguracion() {
+        String[] opciones = {
+            "Ocultar etiquetas al sacar el mouse", 
+            "Ocultar etiquetas al editar"
+        };
+        boolean[] seleccionadas = {
+            ocultarEtiquetasSinCursor,
+            ocultarEtiquetasAlEditar
+        };
+        
+        InputDialog dialog = new InputDialog(null, "Configuración", "Opciones:", opciones, seleccionadas);
+        boolean[] nuevasSeleccionadas = dialog.showDialog();
+
+        if (nuevasSeleccionadas != null) {
+            this.ocultarEtiquetasSinCursor = nuevasSeleccionadas[0];
+            this.ocultarEtiquetasAlEditar = nuevasSeleccionadas[1];
+        }
+    }
+
+    // ... otros métodos ...
+}
+
+private class InstanciaHerramienta {
+    // ... campos y métodos anteriores ...
+
+    public void ajustarNiveles(double nuevoNivelSL, double nuevoNivelTP) {
+        if (esCompra && (nuevoNivelSL >= nivelEntrada || nuevoNivelTP <= nivelEntrada)
+            || !esCompra && (nuevoNivelSL <= nivelEntrada || nuevoNivelTP >= nivelEntrada)) {
+            throw new IllegalArgumentException("Niveles de Stop Loss y Take Profit inválidos para la dirección actual.");
+        }
+        
+        this.nivelSL = nuevoNivelSL;
+        this.nivelTP = nuevoNivelTP;
+        actualizarObjetosGraficos();
+
+        if (!this.ajustando) {
+            generacionSenales.actualizarNiveles(nivelEntrada, nivelSL, nivelTP, esCompra, eaId);
+        }
+    }
+
+    // ... otros métodos ...
+}
+
+class ControladorHerramienta {
+    // ... campos, constructor y otros métodos ...
+
+    public void manejarArrastrarLinea(IChartObject linea, double nuevoNivel) {
+        InstanciaHerramienta instancia = encontrarInstancia(linea);
+        if (instancia == null) {
+            return;  // No se encontró instancia para esta línea, no hacer nada
+        }
+        
+        if (linea == instancia.lineaEntrada) {
+            instancia.moverHerramienta(nuevoNivel);
+        } else if (linea == instancia.lineaSL) {
+            instancia.ajustarNiveles(nuevoNivel, instancia.nivelTP);
+        } else if (linea == instancia.lineaTP) {
+            instancia.ajustarNiveles(instancia.nivelSL, nuevoNivel);
+        }
+    }
+}
+
+public class InterfazGraficaModule {
+    // ... campos y constructor ...
+
+    public void gestionarEventos(MouseEvent mouseEvent) {
+        IChartObject objeto = mouseEvent.getObject();
+
+        switch (mouseEvent.getType()) {
+            case CLICK:
+                if (objeto instanceof IButtonChartObject) {
+                    controlador.manejarClicBoton((IButtonChartObject)objeto);
+                }
+                break;
+            
+            case DOUBLE_CLICK:
+                if (objeto instanceof ILineChartObject) {
+                    controlador.manejarDobleClicEntrada((ILineChartObject)objeto);
+                }
+                break;
+            
+            case DRAG:
+                if (objeto instanceof ILineChartObject) {
+                    double nuevoNivel = mouseEvent.getPrice();
+                    controlador.manejarArrastrarLinea((ILineChartObject)objeto, nuevoNivel);
+                }
+                break;
+        }
+    }
+}
+
+// ... resto del código ...
