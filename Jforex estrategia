@@ -276,4 +276,96 @@ public class InterfazGraficaModule {
     }
 }
 
-// ... resto del código ...
+public class InterfazGraficaModule {
+    // ... campos y constructor ...
+
+    public String crearInstancia(IChart chart) {
+        InstanciaHerramienta nuevaInstancia = new InstanciaHerramienta(chart);
+        String instanceId = nuevaInstancia.getInstanceId();
+        instancias.put(instanceId, nuevaInstancia);
+        return instanceId;
+    }
+
+    public void eliminarInstancia(String instanceId) {
+        InstanciaHerramienta instancia = instancias.remove(instanceId);
+        if (instancia != null) {
+            instancia.eliminar();
+        }
+    }
+
+    public InstanciaHerramienta obtenerInstancia(String instanceId) {
+        return instancias.get(instanceId);
+    }
+
+    // ... otros métodos ...
+}
+
+private class InstanciaHerramienta {
+    // ... campos y métodos anteriores ...
+
+    public void eliminar() {
+        if (rectanguloFondo != null) chart.remove(rectanguloFondo);
+        if (lineaEntrada != null) chart.remove(lineaEntrada);
+        if (lineaSL != null) chart.remove(lineaSL);
+        if (lineaTP != null) chart.remove(lineaTP);
+        if (etiquetaEntrada != null) chart.remove(etiquetaEntrada);
+        if (etiquetaSL != null) chart.remove(etiquetaSL);
+        if (etiquetaTP != null) chart.remove(etiquetaTP);
+        if (botonAjustar != null) chart.remove(botonAjustar);
+        if (botonActivar != null) chart.remove(botonActivar);
+    }
+
+    // ... otros métodos ...
+}
+
+private class InstanciaHerramienta {
+    // ... campos y métodos anteriores ...
+    
+    private static final String ERROR_NIVELES_INVALIDOS = "Niveles de Stop Loss y Take Profit inválidos para la dirección actual.";
+
+    public void ajustarNiveles(double nuevoNivelSL, double nuevoNivelTP) {
+        try {
+            if (esCompra && (nuevoNivelSL >= nivelEntrada || nuevoNivelTP <= nivelEntrada)
+                || !esCompra && (nuevoNivelSL <= nivelEntrada || nuevoNivelTP >= nivelEntrada)) {
+                throw new IllegalArgumentException(ERROR_NIVELES_INVALIDOS);
+            }
+            
+            this.nivelSL = nuevoNivelSL;
+            this.nivelTP = nuevoNivelTP;
+            actualizarObjetosGraficos();
+
+            if (!this.ajustando) {
+                generacionSenales.actualizarNiveles(nivelEntrada, nivelSL, nivelTP, esCompra, eaId);
+            }
+        } catch (IllegalArgumentException e) {
+            JOptionPane.showMessageDialog(null, e.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
+        } catch (Exception e) {
+            LoggingErrorHandlerModule.logError("Error al ajustar niveles: " + e.getMessage(), e);
+        }
+    }
+
+    public void moverHerramienta(double nuevoNivelEntrada) {
+        double pipsSL = Math.abs(nivelEntrada - nivelSL) / chart.getInstrument().getPipValue();
+        double pipsTP = Math.abs(nivelEntrada - nivelTP) / chart.getInstrument().getPipValue();
+        
+        double nuevoNivelSL = esCompra ? nuevoNivelEntrada - pipsSL * chart.getInstrument().getPipValue()
+                                       : nuevoNivelEntrada + pipsSL * chart.getInstrument().getPipValue();
+        double nuevoNivelTP = esCompra ? nuevoNivelEntrada + pipsTP * chart.getInstrument().getPipValue()
+                                       : nuevoNivelEntrada - pipsTP * chart.getInstrument().getPipValue();
+
+        if (nuevoNivelSL < chart.getMinPrice() || nuevoNivelTP > chart.getMaxPrice()) {
+            return;
+        }
+
+        this.nivelEntrada = nuevoNivelEntrada;
+        this.nivelSL = nuevoNivelSL;
+        this.nivelTP = nuevoNivelTP;
+        actualizarObjetosGraficos();
+        
+        if (!this.ajustando) {
+            generacionSenales.actualizarNiveles(nivelEntrada, nivelSL, nivelTP, esCompra, eaId);
+        }
+    }
+
+    // ... otros métodos ...
+}
