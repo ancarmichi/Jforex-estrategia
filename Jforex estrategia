@@ -304,16 +304,16 @@ private class InstanciaHerramienta {
     // ... campos y métodos anteriores ...
 
     public void eliminar() {
-        if (rectanguloFondo != null) chart.remove(rectanguloFondo);
-        if (lineaEntrada != null) chart.remove(lineaEntrada);
-        if (lineaSL != null) chart.remove(lineaSL);
-        if (lineaTP != null) chart.remove(lineaTP);
-        if (etiquetaEntrada != null) chart.remove(etiquetaEntrada);
-        if (etiquetaSL != null) chart.remove(etiquetaSL);
-        if (etiquetaTP != null) chart.remove(etiquetaTP);
-        if (botonAjustar != null) chart.remove(botonAjustar);
-        if (botonActivar != null) chart.remove(botonActivar);
-    }
+    if (rectanguloFondo != null && chart.containsChartObject(rectanguloFondo)) chart.remove(rectanguloFondo);
+    if (lineaEntrada != null && chart.containsChartObject(lineaEntrada)) chart.remove(lineaEntrada);
+    if (lineaSL != null && chart.containsChartObject(lineaSL)) chart.remove(lineaSL);
+    if (lineaTP != null && chart.containsChartObject(lineaTP)) chart.remove(lineaTP);
+    if (etiquetaEntrada != null && chart.containsChartObject(etiquetaEntrada)) chart.remove(etiquetaEntrada);
+    if (etiquetaSL != null && chart.containsChartObject(etiquetaSL)) chart.remove(etiquetaSL);
+    if (etiquetaTP != null && chart.containsChartObject(etiquetaTP)) chart.remove(etiquetaTP);
+    if (botonAjustar != null && chart.containsChartObject(botonAjustar)) chart.remove(botonAjustar);
+    if (botonActivar != null && chart.containsChartObject(botonActivar)) chart.remove(botonActivar);
+}
 
     // ... otros métodos ...
 }
