@@ -171,3 +171,155 @@ public final class ConfigurationModule implements Serializable {
 
     // ... Implementar el resto de setters con validaciones similares ...
 }
+import java.io.*;
+import java.util.*;
+import com.example.logging.Logger;
+
+    /** Nombre del archivo de configuración */
+    private static final String CONFIG_FILE_NAME = "config.properties";
+    
+    /** Valores por defecto para las propiedades */
+    private static final String DEFAULT_SHARED_DIRECTORY = "";
+    private static final String DEFAULT_EA_IDENTIFIERS = "EA1,EA2";
+    private static final String DEFAULT_LOG_LEVEL = "INFO";
+    private static final int DEFAULT_BUTTON_X = 100;
+    private static final int DEFAULT_BUTTON_Y = 100;
+    private static final int DEFAULT_ACTIVATE_BUTTON_X = 200;
+    private static final int DEFAULT_ACTIVATE_BUTTON_Y = 100;
+
+    /**
+     * Carga las propiedades desde el archivo de configuración.
+     * Si el archivo no existe, lo crea con valores por defecto.
+     */
+    private void loadProperties() {
+        Properties props = new Properties();
+        File configFile = new File(CONFIG_FILE_NAME);
+
+        try {
+            if (!configFile.exists()) {
+                configFile.createNewFile();
+            }
+
+            try (FileInputStream fis = new FileInputStream(configFile)) {
+                props.load(fis);
+            }
+
+            // Cargar sharedDirectoryPath
+            sharedDirectoryPath = props.getProperty("sharedDirectoryPath", DEFAULT_SHARED_DIRECTORY);
+
+            // Cargar y validar logLevel
+            String loadedLogLevel = props.getProperty("logLevel", DEFAULT_LOG_LEVEL).toUpperCase();
+            if (!VALID_LOG_LEVELS.contains(loadedLogLevel)) {
+                Logger.warn("Nivel de log inválido en configuración: " + loadedLogLevel + ". Usando valor por defecto: INFO");
+                logLevel = DEFAULT_LOG_LEVEL;
+            } else {
+                logLevel = loadedLogLevel;
+            }
+
+            // Cargar eaIdentifiers
+            String eaIdentifiersStr = props.getProperty("eaIdentifiers", DEFAULT_EA_IDENTIFIERS);
+            eaIdentifiers = new ArrayList<>(Arrays.asList(eaIdentifiersStr.split(",")));
+
+            // Cargar posiciones de botones con manejo de errores de parsing
+            try {
+                buttonPositionX = Integer.parseInt(props.getProperty("buttonPositionX", String.valueOf(DEFAULT_BUTTON_X)));
+            } catch (NumberFormatException e) {
+                buttonPositionX = DEFAULT_BUTTON_X;
+                Logger.warn("Error al parsear buttonPositionX, usando valor por defecto: " + DEFAULT_BUTTON_X);
+            }
+
+            try {
+                buttonPositionY = Integer.parseInt(props.getProperty("buttonPositionY", String.valueOf(DEFAULT_BUTTON_Y)));
+            } catch (NumberFormatException e) {
+                buttonPositionY = DEFAULT_BUTTON_Y;
+                Logger.warn("Error al parsear buttonPositionY, usando valor por defecto: " + DEFAULT_BUTTON_Y);
+            }
+
+            try {
+                activateButtonPositionX = Integer.parseInt(props.getProperty("activateButtonPositionX", 
+                    String.valueOf(DEFAULT_ACTIVATE_BUTTON_X)));
+            } catch (NumberFormatException e) {
+                activateButtonPositionX = DEFAULT_ACTIVATE_BUTTON_X;
+                Logger.warn("Error al parsear activateButtonPositionX, usando valor por defecto: " + DEFAULT_ACTIVATE_BUTTON_X);
+            }
+
+            try {
+                activateButtonPositionY = Integer.parseInt(props.getProperty("activateButtonPositionY", 
+                    String.valueOf(DEFAULT_ACTIVATE_BUTTON_Y)));
+            } catch (NumberFormatException e) {
+                activateButtonPositionY = DEFAULT_ACTIVATE_BUTTON_Y;
+                Logger.warn("Error al parsear activateButtonPositionY, usando valor por defecto: " + DEFAULT_ACTIVATE_BUTTON_Y);
+            }
+
+        } catch (IOException e) {
+            Logger.error("Error al leer el archivo de configuración", e);
+            // Establecer valores por defecto en caso de error
+            setDefaultValues();
+        }
+    }
+
+    /**
+     * Establece los valores por defecto para todas las propiedades.
+     */
+    private void setDefaultValues() {
+        sharedDirectoryPath = DEFAULT_SHARED_DIRECTORY;
+        eaIdentifiers = new ArrayList<>(Arrays.asList(DEFAULT_EA_IDENTIFIERS.split(",")));
+        logLevel = DEFAULT_LOG_LEVEL;
+        buttonPositionX = DEFAULT_BUTTON_X;
+        buttonPositionY = DEFAULT_BUTTON_Y;
+        activateButtonPositionX = DEFAULT_ACTIVATE_BUTTON_X;
+        activateButtonPositionY = DEFAULT_ACTIVATE_BUTTON_Y;
+    }
+
+    // Modificación del constructor para incluir la carga de propiedades
+    private ConfigurationModule() {
+        if (instance != null) {
+            throw new IllegalStateException(INSTANCE_EXISTS_ERROR);
+        }
+        loadProperties();
+    }
+/**
+   public final class ConfigurationModule implements Serializable {
+    // ... código anterior ...
+
+    private void validatePosition(int position, String fieldName) {
+        if (position < 0) {
+            throw new IllegalArgumentException(
+                String.format("La posición %s no puede ser negativa", fieldName));
+        }
+    }
+
+    private synchronized void saveProperties() {
+        Properties props = new Properties();
+        populateProperties(props);
+        
+        Path tempFile = CONFIG_FILE_PATH.resolveSibling(CONFIG_FILE_NAME + ".tmp");
+        try {
+            try (OutputStream os = Files.newOutputStream(tempFile)) {
+                props.store(os, "Configuración de la estrategia de trading");
+            }
+            Files.move(tempFile, CONFIG_FILE_PATH, 
+                      StandardCopyOption.REPLACE_EXISTING,
+                      StandardCopyOption.ATOMIC_MOVE);
+        } catch (IOException e) {
+            Logger.error("Error al escribir el archivo de configuración", e);
+            try {
+                Files.deleteIfExists(tempFile);
+            } catch (IOException deleteError) {
+                Logger.error("Error al eliminar archivo temporal", deleteError);
+            }
+        }
+    }
+
+    private void populateProperties(Properties props) {
+        props.setProperty("sharedDirectoryPath", sharedDirectoryPath);
+        props.setProperty("eaIdentifiers", String.join(",", eaIdentifiers));
+        props.setProperty("logLevel", logLevel);
+        props.setProperty("buttonPositionX", String.valueOf(buttonPositionX));
+        props.setProperty("buttonPositionY", String.valueOf(buttonPositionY));
+        props.setProperty("activateButtonPositionX", String.valueOf(activateButtonPositionX));
+        props.setProperty("activateButtonPositionY", String.valueOf(activateButtonPositionY));
+    }
+
+    // ... setters modificados usando las nuevas utilidades ...
+}
