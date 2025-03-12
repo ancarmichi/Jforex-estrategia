@@ -323,3 +323,120 @@ import com.example.logging.Logger;
 
     // ... setters modificados usando las nuevas utilidades ...
 }
+public final class ConfigurationModule implements Serializable, AutoCloseable {
+    private enum WatcherState {
+        STOPPED, RUNNING, ERROR
+    }
+
+    private static final Path CONFIG_FILE_PATH = Paths.get(CONFIG_FILE_NAME);
+    private final AtomicBoolean isWatcherRunning = new AtomicBoolean(true);
+    private final AtomicReference<WatcherState> watcherState = 
+        new AtomicReference<>(WatcherState.STOPPED);
+    private Thread watcherThread;
+    private WatchService watchService;
+
+    private void handleConfigFileChange() {
+        synchronized (ConfigurationModule.class) {
+            try {
+                int maxRetries = 5;
+                int retryCount = 0;
+                while (retryCount < maxRetries) {
+                    if (Files.isReadable(CONFIG_FILE_PATH)) {
+                        Thread.sleep(100);
+                        loadProperties();
+                        Logger.info("Configuración recargada automáticamente");
+                        return;
+                    }
+                    Thread.sleep(100);
+                    retryCount++;
+                }
+                Logger.warn("No se pudo acceder al archivo después de " + maxRetries + " intentos");
+            } catch (Exception e) {
+                Logger.error("Error al recargar la configuración", e);
+            }
+        }
+    }
+
+    private void initializeWatcher() throws IOException {
+        Path configDir = CONFIG_FILE_PATH.getParent() != null ? 
+            CONFIG_FILE_PATH.getParent() : Paths.get(".");
+        
+        watchService = FileSystems.getDefault().newWatchService();
+        configDir.register(watchService, StandardWatchEventKinds.ENTRY_MODIFY);
+        
+        watcherThread = new Thread(this::watcherLoop, "ConfigWatcherThread");
+        watcherThread.setDaemon(true);
+        watcherThread.start();
+        watcherState.set(WatcherState.RUNNING);
+    }
+
+    private void watcherLoop() {
+        try {
+            while (isWatcherRunning.get()) {
+                WatchKey key = watchService.take();
+                
+                for (WatchEvent<?> event : key.pollEvents()) {
+                    if (event.kind() == StandardWatchEventKinds.OVERFLOW) {
+                        continue;
+                    }
+
+                    @SuppressWarnings("unchecked")
+                    WatchEvent<Path> pathEvent = (WatchEvent<Path>) event;
+                    Path changedFile = pathEvent.context();
+
+                    if (CONFIG_FILE_NAME.equals(changedFile.toString())) {
+                        handleConfigFileChange();
+                    }
+                }
+
+                if (!key.reset()) {
+                    Logger.error("El directorio de configuración ya no es accesible");
+                    watcherState.set(WatcherState.ERROR);
+                    break;
+                }
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            Logger.info("Observador de configuración detenido");
+        } catch (Exception e) {
+            watcherState.set(WatcherState.ERROR);
+            Logger.error("Error en el observador de configuración", e);
+        } finally {
+            closeWatchService();
+        }
+    }
+
+    private void closeWatchService() {
+        if (watchService != null) {
+            try {
+                watchService.close();
+            } catch (IOException e) {
+                Logger.error("Error al cerrar el WatchService", e);
+            }
+        }
+    }
+
+    @Override
+    public void close() {
+        stopConfigWatcher();
+    }
+
+    public void stopConfigWatcher() {
+        if (isWatcherRunning.compareAndSet(true, false)) {
+            if (watcherThread != null) {
+                watcherThread.interrupt();
+                try {
+                    watcherThread.join(1000);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+            }
+            closeWatchService();
+            watcherState.set(WatcherState.STOPPED);
+        }
+    }
+
+    public WatcherState getWatcherState() {
+        return watcherState.get();
+    }
+}
