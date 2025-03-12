@@ -1,0 +1,173 @@
+/**
+ * Módulo de configuración para la estrategia de trading en JForex.
+ * Implementa el patrón Singleton para garantizar una única instancia de configuración.
+ * Esta clase es thread-safe y proporciona protección contra instanciación mediante
+ * reflexión y serialización.
+ *
+ * @author TradingStrategy
+ * @version 1.0
+ * @since 1.0
+ */
+public final class ConfigurationModule implements Serializable {
+    private static final long serialVersionUID = 1L;
+    private static final String INSTANCE_EXISTS_ERROR = 
+        "Ya existe una instancia de ConfigurationModule";
+
+    private static volatile ConfigurationModule instance;
+
+    /**
+     * Constructor privado para prevenir instanciación directa.
+     * Incluye protección contra reflexión.
+     *
+     * @throws IllegalStateException si ya existe una instancia
+     */
+    private ConfigurationModule() {
+        if (instance != null) {
+            throw new IllegalStateException(INSTANCE_EXISTS_ERROR);
+        }
+    }
+
+    /**
+     * Obtiene la instancia única de ConfigurationModule.
+     * Implementa el patrón Singleton con doble verificación de bloqueo
+     * para garantizar la seguridad en entornos multi-hilo.
+     *
+     * @return la única instancia de ConfigurationModule
+     */
+    public static ConfigurationModule getInstance() {
+        if (instance == null) {
+            synchronized (ConfigurationModule.class) {
+                if (instance == null) {
+                    instance = new ConfigurationModule();
+                }
+            }
+        }
+        return instance;
+    }
+
+    /**
+     * Protege contra deserialización múltiple.
+     *
+     * @return la instancia singleton existente
+     */
+    private Object readResolve() {
+        return instance;
+    }
+}
+import java.util.*;
+
+/**
+ * Configuración para la estrategia de trading en JForex.
+ */
+public final class ConfigurationModule implements Serializable {
+    private static final long serialVersionUID = 1L;
+    
+    /** Niveles de log válidos para la aplicación */
+    private static final Set<String> VALID_LOG_LEVELS = 
+        Collections.unmodifiableSet(new HashSet<>(Arrays.asList(
+            "DEBUG", "INFO", "WARN", "ERROR"
+        )));
+
+    /** 
+     * Ruta del directorio compartido para la comunicación entre JForex y MT4.
+     * Debe estar ubicado en una unidad SSD.
+     */
+    private String sharedDirectoryPath = "";
+    
+    /** 
+     * Lista de identificadores de EA (Expert Advisors).
+     * Cada identificador debe ser único y se usa para generar nombres de archivo.
+     */
+    private List<String> eaIdentifiers = new ArrayList<>();
+    
+    /** 
+     * Nivel de logging para la estrategia.
+     * Valores válidos: DEBUG, INFO, WARN, ERROR
+     */
+    private String logLevel = "INFO";
+    
+    /** Coordenada X para la posición del botón "Ajustar" */
+    private int buttonPositionX = 100;
+    
+    /** Coordenada Y para la posición del botón "Ajustar" */
+    private int buttonPositionY = 100;
+    
+    /** Coordenada X para la posición del botón "Activar" */
+    private int activateButtonPositionX = 200;
+    
+    /** Coordenada Y para la posición del botón "Activar" */
+    private int activateButtonPositionY = 100;
+
+    // ... Constructor y getInstance() de la parte 1.1 ...
+
+    /**
+     * Obtiene la ruta del directorio compartido usado para la comunicación
+     * entre JForex y los EAs de MT4.
+     *
+     * @return la ruta absoluta del directorio compartido
+     * @see #setSharedDirectoryPath(String)
+     */
+    public synchronized String getSharedDirectoryPath() {
+        return sharedDirectoryPath;
+    }
+
+    /**
+     * Obtiene una copia inmutable de la lista de identificadores de EA.
+     * Los cambios en la lista retornada no afectarán la configuración.
+     *
+     * @return lista inmutable de identificadores de EA
+     */
+    public synchronized List<String> getEaIdentifiers() {
+        return Collections.unmodifiableList(new ArrayList<>(eaIdentifiers));
+    }
+
+    // ... resto de getters con sincronización y documentación mejorada ...
+}
+/**
+   public final class ConfigurationModule implements Serializable {
+    // ... código anterior ...
+
+    /**
+     * Establece la ruta del directorio compartido.
+     * La ruta debe ser válida y accesible.
+     *
+     * @param sharedDirectoryPath nueva ruta del directorio compartido
+     * @throws IllegalArgumentException si la ruta es null o vacía
+     */
+    public synchronized void setSharedDirectoryPath(String sharedDirectoryPath) {
+        if (sharedDirectoryPath == null || sharedDirectoryPath.trim().isEmpty()) {
+            throw new IllegalArgumentException("La ruta del directorio no puede ser null o vacía");
+        }
+        this.sharedDirectoryPath = sharedDirectoryPath.trim();
+    }
+
+    /**
+     * Establece el nivel de logging para la estrategia.
+     *
+     * @param logLevel nuevo nivel de logging (DEBUG, INFO, WARN, ERROR)
+     * @throws IllegalArgumentException si el nivel no es válido
+     */
+    public synchronized void setLogLevel(String logLevel) {
+        if (logLevel == null || !VALID_LOG_LEVELS.contains(logLevel.toUpperCase())) {
+            throw new IllegalArgumentException("Nivel de log inválido. Debe ser: DEBUG, INFO, WARN o ERROR");
+        }
+        this.logLevel = logLevel.toUpperCase();
+    }
+
+    /**
+     * Establece la coordenada X del botón principal.
+     * El valor debe ser no negativo.
+     *
+     * @param buttonPositionX nueva posición X del botón
+     * @throws IllegalArgumentException si la posición es negativa
+     * @see #getButtonPositionX()
+     */
+    public synchronized void setButtonPositionX(int buttonPositionX) {
+        if (buttonPositionX < 0) {
+            throw new IllegalArgumentException("La posición X no puede ser negativa");
+        }
+        this.buttonPositionX = buttonPositionX;
+    }
+
+    // ... Implementar el resto de setters con validaciones similares ...
+}
