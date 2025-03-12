@@ -1,0 +1,441 @@
+import java.io.*;
+import java.nio.file.*;
+import java.util.*;
+import java.util.concurrent.atomic.*;
+import java.util.stream.Collectors;
+import com.example.logging.Logger;
+
+/**
+ * Módulo de configuración para la estrategia de trading en JForex.
+ * Implementa el patrón Singleton para garantizar una única instancia de configuración.
+ * Esta clase es thread-safe y proporciona protección contra instanciación mediante
+ * reflexión y serialización.
+ *
+ * @author TradingStrategy
+ * @version 1.0
+ * @since 1.0
+ */
+public final class ConfigurationModule implements Serializable, AutoCloseable {
+    private static final long serialVersionUID = 1L;
+    private static final String INSTANCE_EXISTS_ERROR = "Ya existe una instancia de ConfigurationModule";
+    private static final String CONFIG_FILE_NAME = "config.properties";
+    private static final Path CONFIG_FILE_PATH = Paths.get(CONFIG_FILE_NAME);
+    
+    /** Valores por defecto para las propiedades */
+    private static final String DEFAULT_SHARED_DIRECTORY = "";
+    private static final String DEFAULT_EA_IDENTIFIERS = "EA1,EA2";
+    private static final String DEFAULT_LOG_LEVEL = "INFO";
+    private static final int DEFAULT_BUTTON_X = 100;
+    private static final int DEFAULT_BUTTON_Y = 100;
+    private static final int DEFAULT_ACTIVATE_BUTTON_X = 200;
+    private static final int DEFAULT_ACTIVATE_BUTTON_Y = 100;
+
+    /** Niveles de log válidos para la aplicación */
+    private static final Set<String> VALID_LOG_LEVELS = 
+        Collections.unmodifiableSet(new HashSet<>(Arrays.asList(
+            "DEBUG", "INFO", "WARN", "ERROR"
+        )));
+
+    private static volatile ConfigurationModule instance;
+    private final AtomicBoolean isWatcherRunning = new AtomicBoolean(true);
+    private final AtomicReference<WatcherState> watcherState = 
+        new AtomicReference<>(WatcherState.STOPPED);
+    private Thread watcherThread;
+    private WatchService watchService;
+
+    /** 
+     * Ruta del directorio compartido para la comunicación entre JForex y MT4.
+     * Debe estar ubicado en una unidad SSD.
+     */
+    private String sharedDirectoryPath = "";
+    
+    /** 
+     * Lista de identificadores de EA (Expert Advisors).
+     * Cada identificador debe ser único y se usa para generar nombres de archivo.
+     */
+    private List<String> eaIdentifiers = new ArrayList<>();
+    
+    /** 
+     * Nivel de logging para la estrategia.
+     * Valores válidos: DEBUG, INFO, WARN, ERROR
+     */
+    private String logLevel = "INFO";
+    
+    /** Coordenada X para la posición del botón "Ajustar" */
+    private int buttonPositionX = 100;
+    
+    /** Coordenada Y para la posición del botón "Ajustar" */
+    private int buttonPositionY = 100;
+    
+    /** Coordenada X para la posición del botón "Activar" */
+    private int activateButtonPositionX = 200;
+    
+    /** Coordenada Y para la posición del botón "Activar" */
+    private int activateButtonPositionY = 100;
+    private enum WatcherState {
+       STOPPED, RUNNING, ERROR
+   }
+
+   /**
+    * Constructor privado para prevenir instanciación directa.
+    * Incluye protección contra reflexión.
+    *
+    * @throws IllegalStateException si ya existe una instancia
+    */
+   private ConfigurationModule() {
+       if (instance != null) {
+           throw new IllegalStateException(INSTANCE_EXISTS_ERROR);
+       }
+       loadProperties();
+       try {
+           initializeWatcher();
+       } catch (IOException e) {
+           Logger.error("Error al iniciar el observador de configuración", e);
+       }
+   }
+
+   /**
+    * Obtiene la instancia única de ConfigurationModule.
+    *
+    * @return la única instancia de ConfigurationModule
+    */
+   public static ConfigurationModule getInstance() {
+       if (instance == null) {
+           synchronized (ConfigurationModule.class) {
+               if (instance == null) {
+                   instance = new ConfigurationModule();
+               }
+           }
+       }
+       return instance;
+   }
+
+   /**
+    * Obtiene la ruta del directorio compartido.
+    *
+    * @return la ruta del directorio compartido
+    * @see #setSharedDirectoryPath(String)
+    */
+   public synchronized String getSharedDirectoryPath() {
+       return sharedDirectoryPath;
+   }
+
+   /**
+    * Obtiene una copia inmutable de la lista de identificadores de EA.
+    *
+    * @return lista inmutable de identificadores de EA
+    */
+   public synchronized List<String> getEaIdentifiers() {
+       return Collections.unmodifiableList(new ArrayList<>(eaIdentifiers));
+   }
+
+   /**
+    * Obtiene el nivel de logging configurado.
+    *
+    * @return el nivel de logging
+    */
+   public synchronized String getLogLevel() {
+       return logLevel;
+   }
+
+   /**
+    * Obtiene la coordenada X del botón principal.
+    *
+    * @return la posición X del botón
+    */
+   public synchronized int getButtonPositionX() {
+       return buttonPositionX;
+   }
+
+   /**
+    * Obtiene la coordenada Y del botón principal.
+    *
+    * @return la posición Y del botón
+    */
+   public synchronized int getButtonPositionY() {
+       return buttonPositionY;
+   }
+
+   /**
+    * Obtiene la coordenada X del botón de activación.
+    *
+    * @return la posición X del botón de activación
+    */
+   public synchronized int getActivateButtonPositionX() {
+       return activateButtonPositionX;
+   }
+
+   /**
+    * Obtiene la coordenada Y del botón de activación.
+    *
+    * @return la posición Y del botón de activación
+    */
+   public synchronized int getActivateButtonPositionY() {
+       return activateButtonPositionY;
+   }
+   /**
+    * Establece la ruta del directorio compartido.
+    */
+   public synchronized void setSharedDirectoryPath(String sharedDirectoryPath) {
+       if (sharedDirectoryPath == null || sharedDirectoryPath.trim().isEmpty()) {
+           throw new IllegalArgumentException("La ruta del directorio no puede ser null o vacía");
+       }
+       String normalizedPath = sharedDirectoryPath.trim();
+       try {
+           Path path = Paths.get(normalizedPath);
+           if (!Files.exists(path)) {
+               Files.createDirectories(path);
+           }
+           this.sharedDirectoryPath = normalizedPath;
+           saveProperties();
+       } catch (IOException e) {
+           throw new IllegalArgumentException("No se pudo crear o acceder al directorio: " + normalizedPath, e);
+       }
+   }
+
+   /**
+    * Establece el nivel de logging para la estrategia.
+    */
+   public synchronized void setLogLevel(String logLevel) {
+       if (logLevel == null || !VALID_LOG_LEVELS.contains(logLevel.toUpperCase())) {
+           throw new IllegalArgumentException("Nivel de log inválido. Debe ser: DEBUG, INFO, WARN o ERROR");
+       }
+       this.logLevel = logLevel.toUpperCase();
+       saveProperties();
+   }
+
+   /**
+    * Valida que una posición no sea negativa.
+    */
+   private void validatePosition(int position, String fieldName) {
+       if (position < 0) {
+           throw new IllegalArgumentException(
+               String.format("La posición %s no puede ser negativa", fieldName));
+       }
+   }
+
+   public synchronized void setButtonPositionX(int buttonPositionX) {
+       validatePosition(buttonPositionX, "X del botón principal");
+       this.buttonPositionX = buttonPositionX;
+       saveProperties();
+   }
+
+   public synchronized void setButtonPositionY(int buttonPositionY) {
+       validatePosition(buttonPositionY, "Y del botón principal");
+       this.buttonPositionY = buttonPositionY;
+       saveProperties();
+   }
+
+   public synchronized void setActivateButtonPositionX(int activateButtonPositionX) {
+       validatePosition(activateButtonPositionX, "X del botón de activación");
+       this.activateButtonPositionX = activateButtonPositionX;
+       saveProperties();
+   }
+
+   public synchronized void setActivateButtonPositionY(int activateButtonPositionY) {
+       validatePosition(activateButtonPositionY, "Y del botón de activación");
+       this.activateButtonPositionY = activateButtonPositionY;
+       saveProperties();
+   }
+
+   private void loadProperties() {
+       Properties props = new Properties();
+
+       try {
+           if (Files.notExists(CONFIG_FILE_PATH)) {
+               Files.createFile(CONFIG_FILE_PATH);
+           }
+
+           try (InputStream is = Files.newInputStream(CONFIG_FILE_PATH)) {
+               props.load(is);
+           }
+
+           sharedDirectoryPath = props.getProperty("sharedDirectoryPath", DEFAULT_SHARED_DIRECTORY);
+           
+           String loadedLogLevel = props.getProperty("logLevel", DEFAULT_LOG_LEVEL).toUpperCase();
+           if (!VALID_LOG_LEVELS.contains(loadedLogLevel)) {
+               Logger.warn("Nivel de log inválido en configuración: " + loadedLogLevel + ". Usando valor por defecto: INFO");
+               logLevel = DEFAULT_LOG_LEVEL;
+           } else {
+               logLevel = loadedLogLevel;
+           }
+
+           String eaIdentifiersStr = props.getProperty("eaIdentifiers", DEFAULT_EA_IDENTIFIERS);
+           eaIdentifiers = Arrays.stream(eaIdentifiersStr.split(","))
+                               .map(String::trim)
+                               .filter(s -> !s.isEmpty())
+                               .collect(Collectors.toList());
+
+           buttonPositionX = parseIntProperty(props, "buttonPositionX", DEFAULT_BUTTON_X);
+           buttonPositionY = parseIntProperty(props, "buttonPositionY", DEFAULT_BUTTON_Y);
+           activateButtonPositionX = parseIntProperty(props, "activateButtonPositionX", DEFAULT_ACTIVATE_BUTTON_X);
+           activateButtonPositionY = parseIntProperty(props, "activateButtonPositionY", DEFAULT_ACTIVATE_BUTTON_Y);
+
+       } catch (IOException e) {
+           Logger.error("Error al leer el archivo de configuración", e);
+           setDefaultValues();
+       }
+   }
+
+   private int parseIntProperty(Properties props, String key, int defaultValue) {
+       try {
+           int value = Integer.parseInt(props.getProperty(key, String.valueOf(defaultValue)));
+           return value >= 0 ? value : defaultValue;
+       } catch (NumberFormatException e) {
+           Logger.warn("Error al parsear " + key + ", usando valor por defecto: " + defaultValue);
+           return defaultValue;
+       }
+   }
+
+   private void setDefaultValues() {
+       sharedDirectoryPath = DEFAULT_SHARED_DIRECTORY;
+       eaIdentifiers = new ArrayList<>(Arrays.asList(DEFAULT_EA_IDENTIFIERS.split(",")));
+       logLevel = DEFAULT_LOG_LEVEL;
+       buttonPositionX = DEFAULT_BUTTON_X;
+       buttonPositionY = DEFAULT_BUTTON_Y;
+       activateButtonPositionX = DEFAULT_ACTIVATE_BUTTON_X;
+       activateButtonPositionY = DEFAULT_ACTIVATE_BUTTON_Y;
+   }
+
+   private synchronized void saveProperties() {
+       Properties props = new Properties();
+       populateProperties(props);
+       
+       Path tempFile = CONFIG_FILE_PATH.resolveSibling(CONFIG_FILE_NAME + ".tmp");
+       try {
+           try (OutputStream os = Files.newOutputStream(tempFile)) {
+               props.store(os, "Configuración de la estrategia de trading");
+           }
+           Files.move(tempFile, CONFIG_FILE_PATH, 
+                     StandardCopyOption.REPLACE_EXISTING,
+                     StandardCopyOption.ATOMIC_MOVE);
+       } catch (IOException e) {
+           Logger.error("Error al escribir el archivo de configuración", e);
+           try {
+               Files.deleteIfExists(tempFile);
+           } catch (IOException deleteError) {
+               Logger.error("Error al eliminar archivo temporal", deleteError);
+           }
+       }
+   }
+
+   private void populateProperties(Properties props) {
+       props.setProperty("sharedDirectoryPath", sharedDirectoryPath);
+       props.setProperty("eaIdentifiers", String.join(",", eaIdentifiers));
+       props.setProperty("logLevel", logLevel);
+       props.setProperty("buttonPositionX", String.valueOf(buttonPositionX));
+       props.setProperty("buttonPositionY", String.valueOf(buttonPositionY));
+       props.setProperty("activateButtonPositionX", String.valueOf(activateButtonPositionX));
+       props.setProperty("activateButtonPositionY", String.valueOf(activateButtonPositionY));
+   }
+
+   // Métodos del WatchService
+   private void handleConfigFileChange() {
+       synchronized (ConfigurationModule.class) {
+           try {
+               int maxRetries = 5;
+               int retryCount = 0;
+               while (retryCount < maxRetries) {
+                   if (Files.isReadable(CONFIG_FILE_PATH)) {
+                       Thread.sleep(100);
+                       loadProperties();
+                       Logger.info("Configuración recargada automáticamente");
+                       return;
+                   }
+                   Thread.sleep(100);
+                   retryCount++;
+               }
+               Logger.warn("No se pudo acceder al archivo después de " + maxRetries + " intentos");
+           } catch (Exception e) {
+               Logger.error("Error al recargar la configuración", e);
+           }
+       }
+   }
+
+   private void initializeWatcher() throws IOException {
+       Path configDir = CONFIG_FILE_PATH.getParent() != null ? 
+           CONFIG_FILE_PATH.getParent() : Paths.get(".");
+       
+       watchService = FileSystems.getDefault().newWatchService();
+       configDir.register(watchService, StandardWatchEventKinds.ENTRY_MODIFY);
+       
+       watcherThread = new Thread(this::watcherLoop, "ConfigWatcherThread");
+       watcherThread.setDaemon(true);
+       watcherThread.start();
+       watcherState.set(WatcherState.RUNNING);
+   }
+
+   private void watcherLoop() {
+       try {
+           while (isWatcherRunning.get()) {
+               WatchKey key = watchService.take();
+               
+               for (WatchEvent<?> event : key.pollEvents()) {
+                   if (event.kind() == StandardWatchEventKinds.OVERFLOW) {
+                       continue;
+                   }
+
+                   @SuppressWarnings("unchecked")
+                   WatchEvent<Path> pathEvent = (WatchEvent<Path>) event;
+                   Path changedFile = pathEvent.context();
+
+                   if (CONFIG_FILE_NAME.equals(changedFile.toString())) {
+                       handleConfigFileChange();
+                   }
+               }
+
+               if (!key.reset()) {
+                   Logger.error("El directorio de configuración ya no es accesible");
+                   watcherState.set(WatcherState.ERROR);
+                   break;
+               }
+           }
+       } catch (InterruptedException e) {
+           Thread.currentThread().interrupt();
+           Logger.info("Observador de configuración detenido");
+       } catch (Exception e) {
+           watcherState.set(WatcherState.ERROR);
+           Logger.error("Error en el observador de configuración", e);
+       } finally {
+           closeWatchService();
+       }
+   }
+
+   private void closeWatchService() {
+       if (watchService != null) {
+           try {
+               watchService.close();
+           } catch (IOException e) {
+               Logger.error("Error al cerrar el WatchService", e);
+           }
+       }
+   }
+
+   @Override
+   public void close() {
+       stopConfigWatcher();
+   }
+
+   public void stopConfigWatcher() {
+       if (isWatcherRunning.compareAndSet(true, false)) {
+           if (watcherThread != null) {
+               watcherThread.interrupt();
+               try {
+                   watcherThread.join(1000);
+               } catch (InterruptedException e) {
+                   Thread.currentThread().interrupt();
+               }
+           }
+           closeWatchService();
+           watcherState.set(WatcherState.STOPPED);
+       }
+   }
+
+   public WatcherState getWatcherState() {
+       return watcherState.get();
+   }
+
+   private Object readResolve() {
+       return instance;
+   }
+}
