@@ -1,0 +1,210 @@
+Crea un módulo en Java 8 llamado `GUIModule` para una estrategia de trading en JForex.  Este módulo creará una herramienta visual interactiva en el gráfico de JForex, que extiende y mejora la herramienta de ratio riesgo/recompensa nativa.
+
+El módulo debe integrarse con la API de JForex (versión compatible con Java 8, por ejemplo, JForex-API-2.13.99) y seguir las mejores prácticas de programación (código limpio, Javadoc, manejo de errores, separación de responsabilidades).
+
+**1. Estructura General (MVC):**
+
+*   Clase principal: `GUIModule`.
+*   Patrón: Implementa una clara separación de responsabilidades siguiendo el patrón Modelo-Vista-Controlador (MVC):
+    *   **Modelo (`ToolModel` - sugerido):**  Una clase separada que represente los *datos* de la herramienta:
+        *   Niveles de entrada, stop loss y take profit (precios).
+        *   Ratio riesgo/recompensa.
+        *   Estado de la herramienta (visible/oculta, modo de ajuste activado/desactivado).
+        *   Opciones de configuración (ocultar etiquetas).
+        *   Dirección de la operación (compra/venta).
+        *   *No debe contener lógica de dibujo ni de manejo de eventos del ratón*.
+    *   **Vista (`ToolView` - sugerido):** Una clase separada (o una interfaz `ToolView` y una clase que la implemente) responsable de:
+        *   Dibujar los elementos gráficos en el gráfico de JForex (líneas, rectángulos, texto, botones).
+        *   Actualizar la visualización cuando cambie el modelo (por ejemplo, cuando se muevan los niveles).
+        *   *No debe contener lógica de cálculo del ratio ni de manejo de eventos del ratón*.
+    *   **Controlador (`ToolController` - sugerido):** Una clase separada responsable de:
+        *   Manejar los eventos del ratón (clics, arrastres) usando `IMouseListener` de JForex.
+        *   Actualizar el modelo (por ejemplo, cuando el usuario arrastra un nivel).
+        *   Interactuar con la vista para actualizar el dibujo.
+        *   Gestionar la lógica de los botones "Ajustar" y "Activar".
+*   Dependencias:
+    *   API de JForex (versión Java 8).
+    *   Interfaz `LevelChangeListener` (en el paquete `com.example.interfaces`).
+    *   Clases `LevelData` y `Signal` (en el paquete `com.example.model`).
+    *   `ConfigurationModule` (en el paquete `com.example.config`) para obtener/guardar posiciones de botones.
+    *   `LoggingModule` (en el paquete `com.example.logging`, con una clase `Logger` y métodos estáticos `error`, `warn`, `info`) para registro de errores.
+
+**2. Dibujo Básico de la Herramienta:**
+
+*   **Forma:**  Un rectángulo con esquinas cuadradas.
+*   **Bordes:**  Los cuatro bordes del rectángulo, *incluida la línea del nivel de entrada*, deben ser de color blanco (`Color.WHITE` en la API de JForex).
+*   **Áreas Internas:**
+    *   **Zona de Stop Loss:** Desde el nivel de entrada hasta el nivel de stop loss. Color de fondo: rojo semitransparente (usa `new Color(255, 0, 0, 77)` en la API de JForex -  RGBA: 255, 0, 0, alfa 77).
+    *   **Zona de Take Profit:** Desde el nivel de entrada hasta el nivel de take profit. Color de fondo: verde semitransparente (usa `new Color(0, 255, 0, 77)` en la API de JForex - RGBA: 0, 255, 0, alfa 77).
+*   **Líneas Horizontales:** Tres líneas horizontales blancas (`Color.WHITE`) para los niveles de entrada, SL y TP.  Usa la API de JForex para el dibujo.
+*   **Ajuste:** Las líneas de SL y TP deben ser ajustables mediante "arrastrar y soltar" (drag & drop), utilizando la API de JForex. La línea de entrada *también* debe ser arrastrable, pero *solo* para mover toda la herramienta (ver sección de "Mover la Herramienta").
+*   **Identificadores Visuales:** Un pequeño rectángulo (del mismo color que la línea) en el extremo izquierdo de cada línea horizontal, con las letras "E" (Entrada), "SL" (Stop Loss) y "TP" (Take Profit) en color blanco.
+*   **Valores por Defecto (al mostrarse por primera vez):**
+    *   **Entrada:** El precio `bid` actual del instrumento (obtenerlo de la API de JForex).
+    *   **Stop Loss:**
+        *   Si la configuración inicial es de *compra*, el Stop Loss debe estar 10 pips *por debajo* de la entrada.
+        *   Si la configuración inicial es de *venta*, el Stop Loss debe estar 10 pips *por encima* de la entrada.
+    *   **Take Profit:**
+        *   Si la configuración inicial es de *compra*, el Take Profit debe estar 20 pips *por encima* de la entrada (resultando en un ratio 1:2).
+        *    Si la configuración inicial es de *venta*, el Take Profit debe estar 20 pips *por debajo* de la entrada (resultando en un ratio 1:2).
+*   **Estado Inicial:** La herramienta estará *oculta* al iniciar la estrategia.
+
+**3. Interacción Básica:**
+
+*   **`IMouseListener`:** Usa la interfaz `IMouseListener` de la API de JForex para manejar los eventos de arrastrar y soltar (y el doble clic, que se detallará más adelante).
+*   **Mover la Herramienta:** Se debe poder arrastrar *toda* la herramienta desde cualquier borde blanco *excepto* la línea de entrada. La línea de entrada *solo* se usará para el doble clic (para mostrar el menú). Usa la API de JForex para la detección de eventos del ratón.
+*   **Límites del Gráfico:**  Asegúrate de que la herramienta (y sus niveles) *no* puedan moverse ni redimensionarse fuera de los límites visibles del gráfico. Los bordes de la herramienta no deben sobrepasar los bordes del gráfico.  Usa la API de JForex para obtener las dimensiones del gráfico.
+
+**4. Botones "Ajustar" y "Activar":**
+
+*   Crea dos botones: "Ajustar" y "Activar".
+*   **Apariencia:**
+    *   Forma: Rectangulares.
+    *   Fondo: Negro (`Color.BLACK` en la API de JForex).
+    *   Texto: Blanco (`Color.WHITE`), con las palabras "Ajustar" y "Activar" respectivamente.
+    *   Dimensiones: Iguales para ambos botones, y lo suficientemente grandes para que quepa el texto cómodamente.
+*   **Posicionamiento:**
+    *   Alineados horizontalmente.
+    *  *Opcional*: Un pequeño círculo (de color gris - `Color.GRAY`) dibujado *entre* los dos botones. Cuando el usuario haga clic y arrastre este círculo, ambos botones deben moverse juntos. Si no se implementa el circulo, los botones deberán moverse de forma independiente.
+    *   Inicialmente, deben aparecer en la esquina superior izquierda del gráfico, pero deben ser movibles a cualquier ubicación (mediante drag & drop).
+    *   Las posiciones de los botones deben *guardarse* y *cargarse* usando el `ConfigurationModule` (usa los métodos `getButtonPositionX()`, `setButtonPositionX()`, etc.).
+*   **Funcionalidad del botón "Ajustar":**
+    *   Si la herramienta está *oculta*:
+        *   La muestra en el gráfico con los valores por defecto (especificados en la sección "Dibujo Básico").
+        *   Habilita el ajuste de niveles (drag & drop de las líneas de SL y TP).
+        *   Habilita el doble clic en la línea de entrada para mostrar el menú (ver Parte 2).
+    *   Si la herramienta está *visible*:
+        *   Desactiva el modo de ajuste (impide el drag & drop de los niveles).
+        *   *Oculta completamente* la herramienta (y desactiva la "vigilancia" de precios del botón "Activar" - esto se detallará en la Parte 3).
+*   **Funcionalidad del botón "Activar":** *No implementes la lógica de "vigilancia" de precios en este paso*. Solo crea el botón y asegúrate de que se pueda mover. La funcionalidad completa se añadirá en la Parte 3.
+
+**5. Documentación:**
+
+*   Usa Javadoc para documentar todas las clases, métodos y campos públicos y protegidos.
+*   Incluye comentarios claros y concisos en el código para explicar la lógica y el propósito de las diferentes partes, especialmente en las secciones más complejas (como el manejo de eventos del ratón).
+*   Dentro del codigo, en los metodos de la vista, agregar comentarios que indiquen como se podrian hacer pruebas unitarias.
+**6. Etiquetas de Texto (Usando la API de JForex):**
+
+*   **Etiqueta de Nivel de Entrada:**
+    *   **Contenido:** Debe mostrar *únicamente* el valor numérico del ratio riesgo/recompensa, formateado a dos decimales (ej., "3.66"). *No* debe incluir texto adicional como "pips", "precio" o "USD".
+    *   **Texto:** Color blanco (`Color.WHITE`).
+    *   **Fondo:**
+        *   Si la operación actual es de *venta*, el fondo debe ser rojo (`new Color(255, 0, 0, 255)`).
+        *   Si la operación actual es de *compra*, el fondo debe ser verde (`new Color(0, 255, 0, 255)`).
+    *   **Posición:** La etiqueta debe estar alineada horizontalmente con la línea del nivel de entrada.  Debe estar ubicada a la izquierda del rectángulo principal de la herramienta, con una separación de 5 píxeles entre el borde vertical izquierdo del rectángulo y el borde izquierdo de la etiqueta. Utiliza la API de JForex para el posicionamiento y dibujo del texto.
+
+*   **Etiqueta de Nivel de Stop Loss (SL):**
+    *   **Contenido:** Debe mostrar "SL" (en mayúsculas), seguido de un espacio, y luego la distancia en pips entre el nivel de entrada y el nivel de SL (ej., "SL 15.5"). Formatea el valor de los pips a un decimal.
+    *   **Texto:** Color blanco (`Color.WHITE`).
+    *   **Fondo:** Gris semitransparente (`new Color(128, 128, 128, 77)` - RGBA: 128, 128, 128, alfa 77).
+    *   **Posición:** Alineada horizontalmente con la línea del nivel de SL, a la izquierda del rectángulo principal, con una separación de 5 píxeles. Usa la API de JForex.
+
+*   **Etiqueta de Nivel de Take Profit (TP):**
+    *   **Contenido:** Debe mostrar "TP" (en mayúsculas), seguido de un espacio, y luego la distancia en pips entre el nivel de entrada y el nivel de TP (ej., "TP 56.7"). Formatea el valor de los pips a un decimal.
+    *   **Texto:** Color blanco (`Color.WHITE`).
+    *   **Fondo:** Gris semitransparente (`new Color(128, 128, 128, 77)`).
+    *   **Posición:** Alineada horizontalmente con la línea del nivel de TP, a la izquierda del rectángulo principal, con una separación de 5 píxeles. Usa la API de JForex.
+
+*   **Opciones de Visibilidad (Controladas por la Ventana de Configuración):**
+    *   **Opción 1:**  "Ocultar etiquetas cuando el cursor del ratón no esté sobre la herramienta".  Si esta opción está activada, las tres etiquetas (entrada, SL, TP) deben *desaparecer* cuando el cursor del ratón no esté dentro de los límites del rectángulo principal de la herramienta.
+    *   **Opción 2:** "Ocultar etiquetas al editar". Si esta opción está activada, las tres etiquetas deben desaparecer *mientras* el usuario está arrastrando una de las líneas de nivel (SL o TP). Deben reaparecer inmediatamente después de que el usuario suelte la línea.
+
+**7. Menú Desplegable (Doble Clic):**
+
+*   **Activación:** El menú se mostrará *solo* cuando el usuario haga *doble clic* en la línea blanca que representa el nivel de entrada. El doble clic en cualquier otra parte de la herramienta (bordes laterales, áreas de color, etiquetas) *no* debe activar el menú. Usa `IMouseListener` para detectar el doble clic.
+*   **Apariencia:**
+    *   Forma: Rectángulo.
+    *   Fondo: Negro (`Color.BLACK`).
+    *   Símbolos y Texto: Blanco (`Color.WHITE`).
+*   **Botones/Opciones:**
+    *   **Botón de Configuración:**
+        *   **Icono:** Un engranaje.  Usa el carácter Unicode `\u2699` (⚙) para representar el engranaje.
+        *   **Función:** Al hacer clic, abre la *ventana de configuración* (detallada en la sección 8).
+    *   **Botón de Cambio de Lado (Compra/Venta):**
+        *   **Icono:** Dos flechas curvas bidireccionales. Usa un carácter Unicode apropiado, por ejemplo, `\u21C4` (⇄) o `\u21C6` (⇆), o dos flechas (`<-->`).
+        *   **Función:** Al hacer clic:
+            *   Invierte la posición relativa del SL y el TP con respecto al nivel de entrada, *manteniendo las distancias en pips*. Es decir, si el SL estaba 10 pips por debajo y el TP 20 pips por encima, después del cambio, el SL estará 10 pips por *encima* y el TP 20 pips por *debajo*.
+            *   Cambia la dirección de la operación (de compra a venta, o de venta a compra).
+            *   *Actualiza el color de fondo de la etiqueta de entrada* según corresponda (rojo para venta, verde para compra).
+*   **Posicionamiento y Movilidad:**
+    *   El menú debe aparecer a no más de 20 píxeles del punto donde se hizo el doble clic.
+    *   El menú *no* debe estar anclado a la herramienta. El usuario debe poder arrastrarlo libremente por el gráfico (drag & drop).
+
+**8. Ventana de Configuración (Submenú):**
+
+*   **Apertura:** La ventana de configuración se abre al hacer clic en el botón de engranaje del menú desplegable.
+*   **Elementos (organizados verticalmente):**
+    *   **Parámetros Fijos (No Ajustables):**
+        *   **Stop Loss:**
+            *   Texto: "Stop Loss" (alineado a la izquierda).
+            *   Rectángulo: A la derecha del texto, un rectángulo *delgado* (con una altura similar a la de un campo de texto estándar de Java, y solo con borde) que muestre el *precio* del nivel de SL.
+        *   **Entrada:**
+            *   Texto: "Entrada" (alineado a la izquierda).
+            *   Rectángulo: A la derecha del texto, un rectángulo delgado que muestre el *precio* del nivel de entrada.
+        *   **Take Profit:**
+            *   Texto: "Take Profit" (alineado a la izquierda).
+            *   Rectángulo: A la derecha del texto, un rectángulo delgado que muestre el *precio* del nivel de TP.
+    *   **Parámetros Ajustables (Opciones - Checkboxes):**
+        *   **"Ocultar etiquetas al sacar el mouse":**  Una casilla de verificación.  Si está marcada, las etiquetas (SL, TP, ratio) desaparecen cuando el cursor no está dentro del rectángulo de la herramienta.
+        *   **"Ocultar etiquetas al editar":**  Una casilla de verificación.  Si está marcada, las etiquetas desaparecen mientras se arrastran los niveles (reaparecen al soltar).
+        *   Las casillas de verificación deben mostrar una marca de verificación ("✓" -  usa el carácter Unicode `\u2713`) cuando están activadas.
+*   **Movilidad:** La ventana de configuración debe ser movible por el gráfico (drag & drop). No debe estar anclada a ninguna posición fija.
+
+**Consideraciones Adicionales:**
+
+*   **`IMouseListener`:** Utiliza *una sola* implementación de `IMouseListener` para manejar *todos* los eventos del ratón (clics, doble clic, arrastrar, entrar/salir del área de la herramienta).  Dentro de los métodos del *listener*, debes determinar:
+    *   Si el evento ocurrió dentro de los límites de la herramienta (y de qué parte de la herramienta).
+    *   Si el evento fue un clic, un doble clic o un arrastre.
+    *   Qué acción realizar en función del evento y la ubicación.
+*   **Cálculo del Ratio:** Implementa el cálculo del ratio riesgo/recompensa (usando los niveles de entrada, SL y TP).  Actualiza la etiqueta del ratio cada vez que se modifiquen los niveles.
+* **Validación de Niveles:** Impide que el usuario coloque el Stop Loss por encima del nivel de entrada si es una orden de compra y viceversa. La línea que el usuario esté arrastrando debe "detenerse" en el último valor válido.
+**9. Interacción con la Estrategia (Botón "Activar"):**
+
+*   **`LevelChangeListener` (Interfaz):**  `GUIModule` *no* debe implementar directamente la lógica de "vigilancia" de precios (monitorización para saber si el precio toca los niveles). En su lugar, debe *delegar* esta responsabilidad a otro componente (la estrategia principal, o un controlador) que implementará la interfaz `LevelChangeListener`.
+*   **Registro del Listener:** `GUIModule` debe proporcionar un método público llamado `setLevelChangeListener(LevelChangeListener listener)` para que la estrategia principal (o un controlador) pueda registrar su propio objeto *listener*. Este *listener* será el que reciba las notificaciones de cambio de niveles.
+*   **Notificación (al hacer clic en "Activar"):** Cuando el usuario haga clic en el botón "Activar", `GUIModule` debe:
+    1.  Crear un objeto `LevelData` que contenga:
+        *   El precio del nivel de entrada actual.
+        *   El precio del nivel de stop loss actual.
+        *   El precio del nivel de take profit actual.
+        *   Un valor booleano que indique si la operación es de compra (`true`) o de venta (`false`).
+    2.  Llamar al método `onLevelsChanged(levelData)` del objeto `LevelChangeListener` que se registró previamente (a través de `setLevelChangeListener`), pasándole el objeto `LevelData` que acabas de crear.
+    3.  *No* debe hacer nada más después de notificar al *listener*.  *No* debe iniciar ningún tipo de bucle, hilo o tarea para monitorizar el precio.  La responsabilidad de la monitorización del precio es del componente que implementa `LevelChangeListener`.
+* **Desactivar herramienta nativa:**
+    *    Debe existir un método llamado `disableNativeTool()` que desactive la herramienta nativa de ratio riesgo/beneficio de JForex.
+    *    El método `disableNativeTool()` se ejecutará al inicio de la estrategia, el método se creara dentro del `GUIModule`.
+
+**10. Manejo de Errores:**
+
+*   **Validación de Niveles (Prevención):**
+    *   Impide que el usuario arrastre los niveles a valores inválidos:
+        *   En una orden de *compra*, el nivel de Stop Loss *no* debe poder colocarse *por encima* del nivel de entrada, y el nivel de Take Profit *no* debe poder colocarse *por debajo* del nivel de entrada.
+        *   En una orden de *venta*, el nivel de Stop Loss *no* debe poder colocarse *por debajo* del nivel de entrada, y el nivel de Take Profit *no* debe poder colocarse *por encima* del nivel de entrada.
+    *   Implementación: La línea que el usuario esté arrastrando (SL o TP) debe "detenerse" en el último valor válido (el nivel de entrada). No permitas que el usuario continúe arrastrando más allá de ese punto.
+*   **Excepciones (Si la Prevención Falla):**
+    *   Si, a pesar de la prevención, los niveles terminan siendo inválidos (debido a un error de programación, manipulación externa del gráfico, o cualquier otra razón), `GUIModule` debe lanzar una excepción de tipo `IllegalArgumentException`.
+    *   El mensaje de la excepción debe ser descriptivo. Por ejemplo: "Niveles de Stop Loss y Entrada inválidos para una operación de compra".
+*   **Otros Errores (Inesperados):**
+    *   Cualquier otro error inesperado (`Exception`) que ocurra durante la interacción con la interfaz gráfica o la gestión de eventos del ratón (por ejemplo, un error al intentar dibujar en el gráfico) debe ser *capturado*.
+    *   Estos errores inesperados deben registrarse usando el `LoggingModule`.  Asume que existe una clase `Logger` en el paquete `com.example.logging` con métodos estáticos como `error(String message, Throwable e)` para registrar errores con un mensaje y la excepción correspondiente.
+*   **Errores de la API de JForex:**
+    *   Si las llamadas a la API de JForex fallan (por ejemplo, si hay un problema al intentar obtener el precio actual, o al dibujar en el gráfico), estos errores también deben registrarse usando el `LoggingModule`.
+
+**11. Consideraciones Finales:**
+
+*   **API de JForex (Java 8):**  Usa *estrictamente* la API de JForex que sea compatible con Java 8. No utilices características ni métodos de versiones de Java posteriores a Java 8.  Si la API de JForex ha cambiado, asegúrate de usar las clases y métodos equivalentes para Java 8.
+*   **Gestión de Memoria:**  Ten cuidado de no crear objetos innecesarios dentro de los métodos que se ejecutan con mucha frecuencia (como los métodos que manejan los eventos del ratón - `mouseDragged`, `mouseMoved`, etc.).  La creación excesiva de objetos puede afectar al rendimiento.
+*   **Comentarios y Javadoc:**
+    *   Añade comentarios claros y concisos al código para explicar la lógica y el propósito de las diferentes partes, especialmente en las secciones más complejas (como el manejo de eventos del ratón).
+    *   Utiliza Javadoc para documentar todas las clases, métodos (públicos y protegidos) y campos.  Incluye descripciones claras de lo que hace cada método, los parámetros que recibe y el valor que devuelve.
+*   **Sugerencias de Pruebas Unitarias:**  Dentro del código (en comentarios), incluye sugerencias sobre cómo se podrían escribir pruebas unitarias para las diferentes partes del `GUIModule` (aunque no escribas las pruebas unitarias en sí).  Por ejemplo:
+    *   Para el cálculo del ratio: "Se podría crear una prueba unitaria que verifique que el ratio se calcula correctamente para diferentes combinaciones de niveles de entrada, SL y TP".
+    *   Para el manejo de eventos del ratón: "Se podría crear una prueba unitaria que simule eventos del ratón (clics, arrastres) y verifique que el modelo y la vista se actualizan correctamente".
+    *   Para la validación de niveles: "Se podría crear una prueba unitaria que intente establecer niveles inválidos y verifique que se lanza la excepción `IllegalArgumentException`".
+**Dependencias (Recordatorio):**
+
+*   API de JForex (versión Java 8).
+*   `LevelChangeListener` (interfaz).
+*   `LevelData` y `Signal` (clases).
+*   `ConfigurationModule` (para las posiciones de los botones).
+*   `LoggingModule` (para el registro de errores).
